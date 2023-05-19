@@ -3,11 +3,12 @@ use std::fmt::Display;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use syn::ItemUse;
+use syn::__private::ToTokens;
 use syn::{
     visit::Visit, File, Item, ItemConst, ItemEnum, ItemFn, ItemForeignMod, ItemMacro, ItemMod,
     ItemStatic, ItemStruct, ItemTrait, ItemTraitAlias, ItemType, ItemUnion, Signature, Visibility,
 };
+use syn::{ItemUse, PathSegment, UseTree};
 
 #[derive(Clone, Debug)]
 struct Tree(HashMap<String, Option<Tree>>);
@@ -46,11 +47,6 @@ struct Visitor {
     current_dir: PathBuf,
     exports_tree: Tree,
     imports_tree: Tree,
-}
-
-enum BasicItem {
-    Export { name: String, is_module: bool },
-    Import { name: String },
 }
 
 impl<'ast> Visit<'ast> for Visitor {
@@ -95,17 +91,13 @@ impl<'ast> Visit<'ast> for Visitor {
                 vis: Visibility::Public(_),
                 ident,
                 ..
-            }) => BasicItem::Export {
-                name: ident.to_string(),
-                is_module: false,
-            },
+            }) => Some((ident.to_string(), false)),
             Item::ForeignMod(ItemForeignMod { abi: _, items, .. }) => {
                 unimplemented!()
             }
-            Item::Macro(ItemMacro { mac, .. }) => BasicItem::Export {
-                name: mac.path.segments.last().unwrap().ident.to_string(),
-                is_module: false,
-            },
+            Item::Macro(ItemMacro { mac, .. }) => {
+                Some((mac.path.segments.last().unwrap().ident.to_string(), false))
+            }
             Item::Mod(ItemMod { ident, .. }) => {
                 let name = ident.to_string();
                 let mod_dir = self.current_dir.join(&name);
@@ -118,40 +110,30 @@ impl<'ast> Visit<'ast> for Visitor {
                     self.visit_file(alt_mod_file);
                 }
 
-                BasicItem::Export {
-                    name,
-                    is_module: true,
-                }
+                Some((name, true))
             }
-            // Item::Use(use_item) => self.visit_item_use(use_item),
+            Item::Use(use_item) => {
+                self.visit_item_use(use_item);
+                None
+            }
             _ => return,
         };
 
-        match item {
-            BasicItem::Export { name, is_module } => {
-                self.exports_tree.0.entry(name).or_insert(if is_module {
-                    Some(Tree::new())
-                } else {
-                    None
-                });
-            }
-            _ => unimplemented!(),
+        if let Some((name, is_module)) = item {
+            self.exports_tree.0.entry(name).or_insert(if is_module {
+                Some(Tree::new())
+            } else {
+                None
+            });
         }
 
         syn::visit::visit_item(self, i);
     }
 
-    // fn visit_item_use(&mut self, i: &ItemUse) {
-    //     let mut path_parts = Vec::new();
-
-    //     for segment in &i.tree {
-    //         path_parts.push(self.get_path_segment_name(segment));
-    //     }
-
-    //     let path_str = path_parts.join("::");
-
-    //     self.imports_tree.insert(path_str, None);
-    // }
+    fn visit_item_use(&mut self, i: &'ast ItemUse) {
+        let tree = process_use_tree(&i.tree);
+        self.imports_tree.0.extend(tree.0);
+    }
 }
 
 impl Visitor {
@@ -176,25 +158,59 @@ impl Visitor {
         self.current_dir = old_dir;
     }
 
-    // fn get_path_segment_name(&self, segment: &PathSegment) -> String {
-    //     let segment_name = segment.ident.to_string();
-    //     match &segment.arguments {
-    //         syn::PathArguments::None => segment_name,
-    //         syn::PathArguments::AngleBracketed(args) => {
-    //             let mut generics = Vec::new();
-    //             for arg in &args.args {
-    //                 match arg {
-    //                     syn::GenericArgument::Type(ty) => {
-    //                         generics.push(ty.to_token_stream().to_string())
-    //                     }
-    //                     _ => (),
-    //                 }
-    //             }
-    //             format!("{}<{}>", segment_name, generics.join(","))
-    //         }
-    //         syn::PathArguments::Parenthesized(_) => segment_name,
-    //     }
-    // }
+    fn get_path_segment_name(&self, segment: &PathSegment) -> String {
+        let segment_name = segment.ident.to_string();
+        match &segment.arguments {
+            syn::PathArguments::None => segment_name,
+            syn::PathArguments::AngleBracketed(args) => {
+                let mut generics = Vec::new();
+                for arg in &args.args {
+                    match arg {
+                        syn::GenericArgument::Type(ty) => {
+                            generics.push(ty.to_token_stream().to_string())
+                        }
+                        _ => (),
+                    }
+                }
+                format!("{}<{}>", segment_name, generics.join(","))
+            }
+            syn::PathArguments::Parenthesized(_) => segment_name,
+        }
+    }
+}
+
+fn process_use_tree(tree: &UseTree) -> Tree {
+    match tree {
+        UseTree::Path(use_path) => {
+            let mut result = Tree::new();
+            let subtree = process_use_tree(&*use_path.tree);
+            result.0.insert(use_path.ident.to_string(), Some(subtree));
+            result
+        }
+        UseTree::Name(use_name) => {
+            let mut result = Tree::new();
+            result.0.insert(use_name.ident.to_string(), None);
+            result
+        }
+        UseTree::Rename(use_rename) => {
+            let mut result = Tree::new();
+            result.0.insert(use_rename.rename.to_string(), None);
+            result
+        }
+        UseTree::Glob(_) => {
+            let mut result = Tree::new();
+            result.0.insert("*".to_string(), None);
+            result
+        }
+        UseTree::Group(use_group) => {
+            let mut result = Tree::new();
+            for tree in &use_group.items {
+                let subtree = process_use_tree(tree);
+                result.0.extend(subtree.0);
+            }
+            result
+        }
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -208,7 +224,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     visitor.visit_file(file_path);
 
     println!("File: {}", file);
+    println!("Exports tree:");
     println!("{}", visitor.exports_tree);
+    println!("Imports tree:");
+    println!("{}", visitor.imports_tree);
 
     Ok(())
 }
