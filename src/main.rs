@@ -1,3 +1,4 @@
+mod package;
 mod tree;
 mod visitor;
 mod workspace;
@@ -23,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     workspace.load_from_file(
         "/Users/dan.spencer/Sites/core-platform/anaplan-kube-operator/crs-controlplane",
     )?;
-    println!("Workspace members: {:?}", workspace.members);
+    println!("Workspace members: {:?}", workspace.packages);
 
     Ok(())
 }
