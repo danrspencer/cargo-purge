@@ -3,8 +3,8 @@ use std::{collections::HashSet, path::PathBuf};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Package {
-    name: String,
-    path: PathBuf,
+    pub name: String,
+    pub path: PathBuf,
     dependencies: HashSet<String>,
 }
 

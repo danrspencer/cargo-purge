@@ -34,10 +34,11 @@ impl Workspace {
                 let path = format!("{}/{}", file_path, s);
                 for entry in glob(&path).expect("Failed to read glob pattern") {
                     match entry {
-                        Ok(path) => {
+                        Ok(path) if path.is_dir() => {
                             self.packages.insert(Package::new(path));
                         }
                         Err(e) => println!("{:?}", e),
+                        _ => {}
                     }
                 }
             }

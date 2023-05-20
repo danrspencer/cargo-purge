@@ -26,6 +26,8 @@ impl Visitor {
         let old_dir = self.current_dir.clone();
         let mut old_tree = self.exports_tree.clone();
 
+        println!("Visiting file: {}", path.to_str().unwrap());
+
         self.current_dir = path.parent().unwrap().into();
         self.exports_tree = Tree::new();
 
@@ -129,16 +131,19 @@ impl<'ast> Visit<'ast> for Visitor {
             Item::Macro(ItemMacro { mac, .. }) => {
                 Some((mac.path.segments.last().unwrap().ident.to_string(), false))
             }
-            Item::Mod(ItemMod { ident, .. }) => {
+            Item::Mod(ItemMod { ident, content, .. }) => {
                 let name = ident.to_string();
-                let mod_dir = self.current_dir.join(&name);
-                let mod_file = mod_dir.join("mod.rs");
-                let alt_mod_file = self.current_dir.join(format!("{}.rs", &name));
 
-                if mod_file.exists() {
-                    self.visit_file(mod_file);
-                } else if alt_mod_file.exists() {
-                    self.visit_file(alt_mod_file);
+                if content.is_none() {
+                    let mod_dir = self.current_dir.join(&name);
+                    let mod_file = mod_dir.join("mod.rs");
+                    let alt_mod_file = self.current_dir.join(format!("{}.rs", &name));
+
+                    if mod_file.exists() {
+                        self.visit_file(mod_file);
+                    } else if alt_mod_file.exists() {
+                        self.visit_file(alt_mod_file);
+                    }
                 }
 
                 Some((name, true))
