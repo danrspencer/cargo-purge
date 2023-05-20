@@ -18,7 +18,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (exports, import) = workspace.packages.into_iter().fold(
         (Tree::new(), Tree::new()),
         |(mut exports, mut imports), package| {
-            println!("Processing package: {}", package.path.to_str().unwrap());
             let lib_file_path = PathBuf::from(format!(
                 "{}/src/lib.rs",
                 package.path.clone().to_str().unwrap()
@@ -45,10 +44,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     );
 
-    println!("Exports tree:");
-    println!("{}", exports);
-    println!("Imports tree:");
-    println!("{}", import);
+    // println!("Exports tree:");
+    // println!("{}", exports);
+    // println!("Imports tree:");
+    // println!("{}", import);
+
+    let unused_exports = exports.filter_by(&import);
+
+    println!("Unused exports:");
+    println!("{}", unused_exports);
 
     Ok(())
 }

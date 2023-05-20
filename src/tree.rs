@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::hash::Hash;
 
 #[derive(Clone, Debug)]
-pub struct Tree(pub HashMap<String, Option<Tree>>);
+pub struct Tree<T: Clone + Eq + Hash + PartialEq>(pub HashMap<T, Option<Tree<T>>>);
 
-impl Tree {
+impl<T: Clone + Eq + Hash + PartialEq> Tree<T> {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
-    pub fn extend(&mut self, other: Tree) {
+    pub fn extend(&mut self, other: Tree<T>) {
         for (key, value) in other.0 {
             self.0
                 .entry(key)
@@ -25,14 +26,39 @@ impl Tree {
                 .or_insert(value);
         }
     }
+
+    pub fn filter_by(&self, other: &Tree<T>) -> Tree<T> {
+        let mut filtered_nodes = HashMap::new();
+
+        for (key, value) in &self.0 {
+            if let Some(Some(other_tree)) = other.0.get(key) {
+                if let Some(tree) = value {
+                    let filtered_tree = tree.filter_by(other_tree);
+                    if !filtered_tree.0.is_empty() {
+                        filtered_nodes.insert(key.clone(), Some(filtered_tree));
+                    }
+                } else {
+                    filtered_nodes.insert(key.clone(), None);
+                }
+            } else {
+                filtered_nodes.insert(key.clone(), value.clone());
+            }
+        }
+
+        Tree(filtered_nodes)
+    }
 }
 
-impl Display for Tree {
+impl<T: Clone + Display + Eq + Hash + PartialEq> Display for Tree<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn print_tree(tree: &Tree, prefix: String, f: &mut std::fmt::Formatter<'_>) {
+        fn print_tree<T: Clone + Display + Eq + Hash + PartialEq>(
+            tree: &Tree<T>,
+            prefix: String,
+            f: &mut std::fmt::Formatter<'_>,
+        ) {
             for (name, maybe_subtree) in &tree.0 {
                 let new_prefix = if prefix.is_empty() {
-                    name.clone()
+                    name.clone().to_string()
                 } else {
                     format!("{}::{}", prefix, name)
                 };

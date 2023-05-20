@@ -9,8 +9,8 @@ use syn::{ItemUse, UseTree};
 
 pub struct Visitor {
     pub current_dir: PathBuf,
-    pub exports_tree: Tree,
-    pub imports_tree: Tree,
+    pub exports_tree: Tree<String>,
+    pub imports_tree: Tree<String>,
 }
 
 impl Visitor {
@@ -25,8 +25,6 @@ impl Visitor {
     pub fn visit_file(&mut self, path: PathBuf) {
         let old_dir = self.current_dir.clone();
         let mut old_tree = self.exports_tree.clone();
-
-        println!("Visiting file: {}", path.to_str().unwrap());
 
         self.current_dir = path.parent().unwrap().into();
         self.exports_tree = Tree::new();
@@ -46,7 +44,7 @@ impl Visitor {
     }
 }
 
-fn process_use_tree(tree: &UseTree) -> Tree {
+fn process_use_tree(tree: &UseTree) -> Tree<String> {
     match tree {
         UseTree::Path(use_path) => {
             let mut result = Tree::new();
