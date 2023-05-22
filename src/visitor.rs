@@ -57,9 +57,7 @@ impl Visitor {
             path.file_stem().unwrap().to_str().unwrap().to_owned()
         };
 
-        old_tree
-            .0
-            .insert(module_name, Some(self.exports_tree.clone()));
+        old_tree.insert(module_name, Some(self.exports_tree.clone()));
 
         self.exports_tree = old_tree;
         self.current_dir = old_dir;
@@ -71,29 +69,29 @@ fn process_use_tree(tree: &UseTree) -> Tree<String> {
         UseTree::Path(use_path) => {
             let mut result = Tree::new();
             let subtree = process_use_tree(&*use_path.tree);
-            result.0.insert(use_path.ident.to_string(), Some(subtree));
+            result.insert(use_path.ident.to_string(), Some(subtree));
             result
         }
         UseTree::Name(use_name) => {
             let mut result = Tree::new();
-            result.0.insert(use_name.ident.to_string(), None);
+            result.insert(use_name.ident.to_string(), None);
             result
         }
         UseTree::Rename(use_rename) => {
             let mut result = Tree::new();
-            result.0.insert(use_rename.rename.to_string(), None);
+            result.insert(use_rename.rename.to_string(), None);
             result
         }
         UseTree::Glob(_) => {
             let mut result = Tree::new();
-            result.0.insert("*".to_string(), None);
+            result.insert("*".to_string(), None);
             result
         }
         UseTree::Group(use_group) => {
             let mut result = Tree::new();
             for tree in &use_group.items {
                 let subtree = process_use_tree(tree);
-                result.0.extend(subtree.0);
+                result.extend(subtree);
             }
             result
         }
@@ -193,7 +191,7 @@ impl<'ast> Visit<'ast> for Visitor {
         };
 
         if let Some(name) = item {
-            self.exports_tree.0.entry(name).or_insert(None);
+            self.exports_tree.entry(name).or_insert(None);
         }
 
         syn::visit::visit_item(self, i);

@@ -1,15 +1,10 @@
-mod package;
 mod tree;
 mod visitor;
-mod workspace;
 
 use crate::tree::Tree;
 use crate::visitor::Visitor;
 use cargo::core::Workspace;
-use cargo::util::command_prelude::*;
-use cargo::CliResult;
 use cargo::Config;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 fn main() {
@@ -27,7 +22,7 @@ fn find_unused_exports(workspace_path: PathBuf) -> Tree<String> {
     let config = Config::default().unwrap();
     let workspace = Workspace::new(&manifest_path, &config).expect("Failed to load workspace");
 
-    let (exports, imports) = workspace.members().into_iter().fold(
+    let (exports, imports) = workspace.members().fold(
         (Tree::new(), Tree::new()),
         |(mut exports, mut imports), package| {
             // Todo - can we figure out the entry point from the Package struct?
@@ -51,9 +46,7 @@ fn find_unused_exports(workspace_path: PathBuf) -> Tree<String> {
         },
     );
 
-    let unused_exports = exports.filter_by(&imports);
-
-    unused_exports
+    exports.filter_by(&imports)
 }
 
 #[cfg(test)]

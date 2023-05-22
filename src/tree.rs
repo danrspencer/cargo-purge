@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -45,6 +46,10 @@ impl<T: Clone + Eq + Hash + PartialEq + Ord> Tree<T> {
 
     pub fn insert(&mut self, key: T, value: Option<Tree<T>>) {
         self.0.insert(key, value);
+    }
+
+    pub fn entry(&mut self, key: T) -> Entry<'_, T, Option<Tree<T>>> {
+        self.0.entry(key)
     }
 
     pub fn filter_by(&self, other: &Tree<T>) -> Tree<T> {

@@ -1,4 +1,4 @@
-# Cargo Purge
+# Cargo Purge (Alpha Version)
 
 **Please note that Cargo Purge is currently in early alpha development. Use it with caution and expect potential issues or limitations. Your feedback and contributions are highly appreciated.**
 
@@ -8,11 +8,27 @@ Please note that Cargo Purge is intended for internal use within a Rust workspac
 
 ## Installation
 
-To install Cargo Purge, ensure that you have Rust and Cargo installed on your system. Then, open a terminal and run the following command:
+To install Cargo Purge, ensure that you have Rust and Cargo installed on your system. You can install the tool from the repository by following these steps:
 
-```
-$ cargo install cargo-purge
-```
+1. Clone the repository to your local machine:
+
+   ```
+   $ git clone https://github.com/your-username/cargo-purge.git
+   ```
+
+2. Navigate to the cloned repository:
+
+   ```
+   $ cd cargo-purge
+   ```
+
+3. Build and install the tool using Cargo:
+
+   ```
+   $ cargo install --path .
+   ```
+
+   This command will build the tool and install it into your system's binary directory.
 
 ## Usage
 
@@ -48,7 +64,7 @@ Cargo Purge is inspired by the need to identify and eliminate dead code within R
 
 ## Contact
 
-For any further questions or inquiries, please submit an issue.
+For any further questions or inquiries, please contact [your-email@example.com](mailto:your-email@example.com).
 
 ---
 
