@@ -29,13 +29,12 @@ impl Visitor {
         self.current_dir = path.parent().unwrap().into();
         self.exports_tree = Tree::new();
 
-        println!("Visiting file: {:?}", path);
-
         let file_content = fs::read_to_string(&path).unwrap();
         let syntax_tree = syn::parse_file(&file_content).unwrap();
 
         syn::visit::visit_file(self, &syntax_tree);
 
+        // todo - make this not awful
         let module_name = if path.file_name().unwrap() == "lib.rs" {
             path.parent()
                 .unwrap()
@@ -58,11 +57,10 @@ impl Visitor {
             path.file_stem().unwrap().to_str().unwrap().to_owned()
         };
 
-        println!("Module name: {}", module_name);
-
         old_tree
             .0
             .insert(module_name, Some(self.exports_tree.clone()));
+
         self.exports_tree = old_tree;
         self.current_dir = old_dir;
     }
@@ -154,7 +152,7 @@ impl<'ast> Visit<'ast> for Visitor {
                 Some((mac.path.segments.last().unwrap().ident.to_string(), false))
             }
             Item::Mod(ItemMod {
-                vis: Visibility::Public(_),
+                vis,
                 ident,
                 content,
                 ..
@@ -166,14 +164,26 @@ impl<'ast> Visit<'ast> for Visitor {
                     let mod_file = mod_dir.join("mod.rs");
                     let alt_mod_file = self.current_dir.join(format!("{}.rs", &name));
 
+                    let mut visitor = Visitor::new(mod_dir);
+
                     if mod_file.exists() {
-                        self.visit_file(mod_file);
+                        visitor.visit_file(mod_file);
                     } else if alt_mod_file.exists() {
-                        self.visit_file(alt_mod_file);
+                        visitor.visit_file(alt_mod_file);
                     }
+
+                    if matches!(vis, Visibility::Public(_)) {
+                        self.exports_tree.extend(visitor.exports_tree);
+                    }
+
+                    self.imports_tree.extend(visitor.imports_tree);
                 }
 
-                Some((name, true))
+                if matches!(vis, Visibility::Public(_)) {
+                    Some((name, true))
+                } else {
+                    None
+                }
             }
             Item::Use(use_item) => {
                 self.visit_item_use(use_item);
@@ -181,8 +191,6 @@ impl<'ast> Visit<'ast> for Visitor {
             }
             _ => return,
         };
-
-        println!("item: {:?}", item);
 
         if let Some((name, is_module)) = item {
             self.exports_tree.0.entry(name).or_insert(if is_module {
@@ -226,6 +234,28 @@ mod test {
                         },
                     }
                 },
+            })
+        )
+    }
+
+    #[test]
+    fn it_correctly_gets_all_imports() {
+        let path = PathBuf::from("test_workspaces/workspace_1/lib/package_2/src/lib.rs");
+
+        let mut visitor = Visitor::new(path.parent().unwrap().into());
+        visitor.visit_file(PathBuf::from(path));
+
+        let imports = serde_json::to_value(visitor.imports_tree).unwrap();
+
+        assert_eq!(
+            imports,
+            json!({
+                "package_1": {
+                    "public_hello": null,
+                    "public_module": {
+                        "public_hello": null,
+                    },
+                }
             })
         )
     }

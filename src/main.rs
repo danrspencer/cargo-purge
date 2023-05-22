@@ -46,8 +46,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // println!("Exports tree:");
     // println!("{}", exports);
-    // println!("Imports tree:");
-    // println!("{}", import);
+    println!("Imports tree:");
+    println!("{}", import);
 
     let unused_exports = exports.filter_by(&import);
 
