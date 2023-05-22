@@ -1,14 +1,29 @@
-use serde::Serialize;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::hash::Hash;
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct Tree<T: Clone + Eq + Hash + PartialEq>(pub HashMap<T, Option<Tree<T>>>);
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Tree<T: Clone + Eq + Hash + PartialEq + Ord>(pub BTreeMap<T, Option<Tree<T>>>);
 
-impl<T: Clone + Eq + Hash + PartialEq> Tree<T> {
+impl<T: Clone + Eq + Hash + PartialEq + Ord> IntoIterator for Tree<T> {
+    type Item = (T, Option<Tree<T>>);
+    type IntoIter = std::collections::btree_map::IntoIter<T, Option<Tree<T>>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<T: Clone + Eq + Hash + PartialEq + Ord> FromIterator<(T, Option<Tree<T>>)> for Tree<T> {
+    fn from_iter<I: IntoIterator<Item = (T, Option<Tree<T>>)>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl<T: Clone + Eq + Hash + PartialEq + Ord> Tree<T> {
     pub fn new() -> Self {
-        Self(HashMap::new())
+        Self(BTreeMap::new())
     }
 
     pub fn extend(&mut self, other: Tree<T>) {
@@ -33,20 +48,22 @@ impl<T: Clone + Eq + Hash + PartialEq> Tree<T> {
     }
 
     pub fn filter_by(&self, other: &Tree<T>) -> Tree<T> {
-        let mut filtered_nodes = HashMap::new();
+        let mut filtered_nodes = BTreeMap::new();
 
-        for (key, value) in &self.0 {
-            if let Some(Some(other_tree)) = other.0.get(key) {
-                if let Some(tree) = value {
-                    let filtered_tree = tree.filter_by(other_tree);
+        for (key, sub_tree) in &self.0 {
+            let other_sub_tree = other.0.get(key);
+
+            match (sub_tree, other_sub_tree) {
+                (Some(sub_tree), Some(Some(other_sub_tree))) => {
+                    let filtered_tree = sub_tree.filter_by(other_sub_tree);
                     if !filtered_tree.0.is_empty() {
                         filtered_nodes.insert(key.clone(), Some(filtered_tree));
                     }
-                } else {
+                }
+                (None, None) => {
                     filtered_nodes.insert(key.clone(), None);
                 }
-            } else {
-                filtered_nodes.insert(key.clone(), value.clone());
+                _ => (),
             }
         }
 
@@ -54,9 +71,9 @@ impl<T: Clone + Eq + Hash + PartialEq> Tree<T> {
     }
 }
 
-impl<T: Clone + Display + Eq + Hash + PartialEq> Display for Tree<T> {
+impl<T: Clone + Display + Eq + Hash + PartialEq + Ord> Display for Tree<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn print_tree<T: Clone + Display + Eq + Hash + PartialEq>(
+        fn print_tree<T: Clone + Display + Eq + Hash + PartialEq + Ord>(
             tree: &Tree<T>,
             prefix: String,
             f: &mut std::fmt::Formatter<'_>,
@@ -168,5 +185,42 @@ mod tests {
         let serialized = serde_json::to_value(&tree).unwrap();
 
         assert_eq!(serialized, json!({"key":{"sub_key":null}}));
+    }
+
+    #[test]
+    fn it_filters_one_tree_by_another() {
+        let mut tree: Tree<String> = serde_json::from_value(json!({
+            "A": {
+                "B": null,
+                "C": {
+                    "D": null
+                }
+            },
+            "E": null
+        }))
+        .unwrap();
+
+        let other_tree: Tree<String> = serde_json::from_value(json!({
+            "A": {
+                "C": null
+            },
+            "E": null,
+            "F": null
+        }))
+        .unwrap();
+
+        // Filter the tree
+        let filtered_tree = tree.filter_by(&other_tree);
+
+        // Expected result
+        let expected_result: Tree<String> = serde_json::from_value(json!({
+            "A": {
+                "B": null
+            },
+        }))
+        .unwrap();
+
+        // Assert the result matches the expected value
+        assert_eq!(filtered_tree, expected_result);
     }
 }

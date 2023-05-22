@@ -142,14 +142,14 @@ impl<'ast> Visit<'ast> for Visitor {
                 vis: Visibility::Public(_),
                 ident,
                 ..
-            }) => Some((ident.to_string(), false)),
+            }) => Some(ident.to_string()),
             Item::ForeignMod(ItemForeignMod {
                 abi: _, items: _, ..
             }) => {
                 unimplemented!()
             }
             Item::Macro(ItemMacro { mac, .. }) => {
-                Some((mac.path.segments.last().unwrap().ident.to_string(), false))
+                Some(mac.path.segments.last().unwrap().ident.to_string())
             }
             Item::Mod(ItemMod {
                 vis,
@@ -180,7 +180,7 @@ impl<'ast> Visit<'ast> for Visitor {
                 }
 
                 if matches!(vis, Visibility::Public(_)) {
-                    Some((name, true))
+                    Some(name)
                 } else {
                     None
                 }
@@ -192,12 +192,8 @@ impl<'ast> Visit<'ast> for Visitor {
             _ => return,
         };
 
-        if let Some((name, is_module)) = item {
-            self.exports_tree.0.entry(name).or_insert(if is_module {
-                Some(Tree::new())
-            } else {
-                None
-            });
+        if let Some(name) = item {
+            self.exports_tree.0.entry(name).or_insert(None);
         }
 
         syn::visit::visit_item(self, i);
@@ -205,7 +201,7 @@ impl<'ast> Visit<'ast> for Visitor {
 
     fn visit_item_use(&mut self, i: &'ast ItemUse) {
         let tree = process_use_tree(&i.tree);
-        self.imports_tree.0.extend(tree.0);
+        self.imports_tree.extend(tree);
     }
 }
 
@@ -226,7 +222,9 @@ mod test {
             exports,
             json!({
                 "package_1": {
-                    "public_hello": null,
+                    "public_hello_1": null,
+                    "public_hello_2": null,
+                    "public_hello_3": null,
                     "public_module": {
                         "public_hello": null,
                         "public": {
@@ -251,10 +249,17 @@ mod test {
             imports,
             json!({
                 "package_1": {
-                    "public_hello": null,
+                    "public_hello_1": null,
+                    "public_hello_2": null,
                     "public_module": {
                         "public_hello": null,
+                        "public": {
+                            "public_hello": null,
+                        },
                     },
+                },
+                "super": {
+                    "*": null
                 }
             })
         )
