@@ -5,36 +5,34 @@ mod workspace;
 
 use crate::tree::Tree;
 use crate::visitor::Visitor;
-use crate::workspace::Workspace;
+use cargo::core::Workspace;
+use cargo::util::command_prelude::*;
+use cargo::CliResult;
+use cargo::Config;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let unused_exports = find_unused_exports(
-        "/Users/dan.spencer/Sites/core-platform/anaplan-kube-operator/crs-controlplane",
-    );
+fn main() {
+    let current_path = std::env::current_dir().unwrap();
+
+    let unused_exports = find_unused_exports(current_path);
 
     println!("Unused exports:");
     println!("{}", unused_exports);
-
-    Ok(())
 }
 
-fn find_unused_exports(workspace_path: &str) -> Tree<String> {
-    let mut workspace = Workspace::new();
-    workspace.load_from_file(workspace_path).unwrap();
+fn find_unused_exports(workspace_path: PathBuf) -> Tree<String> {
+    let manifest_path = Path::new(&workspace_path).join("Cargo.toml");
 
-    let (exports, imports) = workspace.packages.into_iter().fold(
+    let config = Config::default().unwrap();
+    let workspace = Workspace::new(&manifest_path, &config).expect("Failed to load workspace");
+
+    let (exports, imports) = workspace.members().into_iter().fold(
         (Tree::new(), Tree::new()),
         |(mut exports, mut imports), package| {
-            let lib_file_path = PathBuf::from(format!(
-                "{}/src/lib.rs",
-                package.path.clone().to_str().unwrap()
-            ));
-            let main_file_path = PathBuf::from(format!(
-                "{}/src/main.rs",
-                package.path.clone().to_str().unwrap()
-            ));
+            // Todo - can we figure out the entry point from the Package struct?
+            let lib_file_path = Path::new(&package.root()).join("src").join("lib.rs");
+            let main_file_path = Path::new(&package.root()).join("src").join("main.rs");
 
             let file_path = if Path::new(&lib_file_path).exists() {
                 lib_file_path
@@ -44,7 +42,7 @@ fn find_unused_exports(workspace_path: &str) -> Tree<String> {
                 panic!("Neither lib.rs nor main.rs found in package");
             };
 
-            let mut visitor = Visitor::new(package.path);
+            let mut visitor = Visitor::new(package.root().into());
             visitor.visit_file(file_path);
 
             exports.extend(visitor.exports_tree);
