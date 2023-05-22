@@ -56,7 +56,9 @@ mod test {
 
     #[test]
     fn it_correctly_finds_unused_exports() {
-        let unused_exports = find_unused_exports("test_workspaces/workspace_1");
+        let current_path = std::env::current_dir().unwrap();
+        let test_workspace = current_path.join("test_workspaces").join("workspace_1");
+        let unused_exports = find_unused_exports(test_workspace);
         let unused_exports = serde_json::to_value(unused_exports).unwrap();
 
         assert_eq!(

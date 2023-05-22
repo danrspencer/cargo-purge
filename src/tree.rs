@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn it_filters_one_tree_by_another() {
-        let mut tree: Tree<String> = serde_json::from_value(json!({
+        let tree: Tree<String> = serde_json::from_value(json!({
             "A": {
                 "B": null,
                 "C": {
