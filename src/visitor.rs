@@ -240,6 +240,11 @@ impl<'ast> Visit<'ast> for Visitor {
                     current_tree = current_tree
                         .0
                         .entry(segment_name)
+                        .and_modify(|val| {
+                            if val.is_none() {
+                                *val = Some(Tree::new())
+                            }
+                        })
                         .or_insert_with(|| Some(Tree::new()))
                         .as_mut()
                         .unwrap();
