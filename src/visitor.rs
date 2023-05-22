@@ -29,12 +29,36 @@ impl Visitor {
         self.current_dir = path.parent().unwrap().into();
         self.exports_tree = Tree::new();
 
+        println!("Visiting file: {:?}", path);
+
         let file_content = fs::read_to_string(&path).unwrap();
         let syntax_tree = syn::parse_file(&file_content).unwrap();
 
         syn::visit::visit_file(self, &syntax_tree);
 
-        let module_name = path.file_stem().unwrap().to_str().unwrap().to_owned();
+        let module_name = if path.file_name().unwrap() == "lib.rs" {
+            path.parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()
+        } else if path.file_name().unwrap() == "mod.rs" {
+            path.parent()
+                .unwrap()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()
+        } else {
+            path.file_stem().unwrap().to_str().unwrap().to_owned()
+        };
+
+        println!("Module name: {}", module_name);
 
         old_tree
             .0
@@ -129,7 +153,12 @@ impl<'ast> Visit<'ast> for Visitor {
             Item::Macro(ItemMacro { mac, .. }) => {
                 Some((mac.path.segments.last().unwrap().ident.to_string(), false))
             }
-            Item::Mod(ItemMod { ident, content, .. }) => {
+            Item::Mod(ItemMod {
+                vis: Visibility::Public(_),
+                ident,
+                content,
+                ..
+            }) => {
                 let name = ident.to_string();
 
                 if content.is_none() {
@@ -153,6 +182,8 @@ impl<'ast> Visit<'ast> for Visitor {
             _ => return,
         };
 
+        println!("item: {:?}", item);
+
         if let Some((name, is_module)) = item {
             self.exports_tree.0.entry(name).or_insert(if is_module {
                 Some(Tree::new())
@@ -167,5 +198,35 @@ impl<'ast> Visit<'ast> for Visitor {
     fn visit_item_use(&mut self, i: &'ast ItemUse) {
         let tree = process_use_tree(&i.tree);
         self.imports_tree.0.extend(tree.0);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn it_correctly_gets_public_exports() {
+        let path = PathBuf::from("test_workspaces/workspace_1/lib/package_1/src/lib.rs");
+        let mut visitor = Visitor::new(path.parent().unwrap().into());
+        visitor.visit_file(PathBuf::from(path));
+
+        let exports = serde_json::to_value(visitor.exports_tree).unwrap();
+
+        assert_eq!(
+            exports,
+            json!({
+                "package_1": {
+                    "public_hello": null,
+                    "public_module": {
+                        "public_hello": null,
+                        "public": {
+                            "public_hello": null,
+                        },
+                    }
+                },
+            })
+        )
     }
 }

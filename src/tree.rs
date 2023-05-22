@@ -1,8 +1,9 @@
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::hash::Hash;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Tree<T: Clone + Eq + Hash + PartialEq>(pub HashMap<T, Option<Tree<T>>>);
 
 impl<T: Clone + Eq + Hash + PartialEq> Tree<T> {
@@ -25,6 +26,10 @@ impl<T: Clone + Eq + Hash + PartialEq> Tree<T> {
                 })
                 .or_insert(value);
         }
+    }
+
+    pub fn insert(&mut self, key: T, value: Option<Tree<T>>) {
+        self.0.insert(key, value);
     }
 
     pub fn filter_by(&self, other: &Tree<T>) -> Tree<T> {
@@ -80,11 +85,12 @@ impl<T: Clone + Display + Eq + Hash + PartialEq> Display for Tree<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn it_extends_empty_tree_with_empty_tree() {
-        let mut tree1 = Tree::new();
-        let tree2 = Tree::new();
+        let mut tree1: Tree<String> = Tree::new();
+        let tree2: Tree<String> = Tree::new();
 
         tree1.extend(tree2);
 
@@ -150,5 +156,17 @@ mod tests {
         assert_eq!(merged_sub_tree.0.len(), 2);
         assert!(merged_sub_tree.0.contains_key("sub_key1"));
         assert!(merged_sub_tree.0.contains_key("sub_key2"));
+    }
+
+    #[test]
+    fn it_serializes_as_expected() {
+        let mut tree = Tree::new();
+        let mut sub_tree = Tree::new();
+        sub_tree.0.insert("sub_key".to_string(), None);
+        tree.0.insert("key".to_string(), Some(sub_tree));
+
+        let serialized = serde_json::to_value(&tree).unwrap();
+
+        assert_eq!(serialized, json!({"key":{"sub_key":null}}));
     }
 }
