@@ -5,7 +5,7 @@ use syn::{
     visit::Visit, Item, ItemConst, ItemEnum, ItemFn, ItemForeignMod, ItemMacro, ItemMod,
     ItemStatic, ItemStruct, ItemTrait, ItemTraitAlias, ItemType, Signature, Visibility,
 };
-use syn::{ItemUse, UseTree};
+use syn::{Block, ExprPath, ItemUse, Stmt, UseTree};
 
 pub struct Visitor {
     pub current_dir: PathBuf,
@@ -111,11 +111,6 @@ impl<'ast> Visit<'ast> for Visitor {
                 ident,
                 ..
             })
-            | Item::Fn(ItemFn {
-                vis: Visibility::Public(_),
-                sig: Signature { ident, .. },
-                ..
-            })
             | Item::Const(ItemConst {
                 vis: Visibility::Public(_),
                 ident,
@@ -148,6 +143,20 @@ impl<'ast> Visit<'ast> for Visitor {
             }
             Item::Macro(ItemMacro { mac, .. }) => {
                 Some(mac.path.segments.last().unwrap().ident.to_string())
+            }
+            Item::Fn(ItemFn {
+                vis,
+                sig: Signature { ident, .. },
+                block,
+                ..
+            }) => {
+                self.visit_block(block);
+
+                if matches!(vis, Visibility::Public(_)) {
+                    Some(ident.to_string())
+                } else {
+                    None
+                }
             }
             Item::Mod(ItemMod {
                 vis,
@@ -201,6 +210,45 @@ impl<'ast> Visit<'ast> for Visitor {
         let tree = process_use_tree(&i.tree);
         self.imports_tree.extend(tree);
     }
+
+    fn visit_block(&mut self, i: &'ast Block) {
+        for stmt in &i.stmts {
+            if let Stmt::Expr(expr, _) = stmt {
+                self.visit_expr(expr);
+            }
+        }
+
+        syn::visit::visit_block(self, i);
+    }
+
+    fn visit_expr_path(&mut self, i: &'ast ExprPath) {
+        let segments = &i.path.segments;
+        let len = segments.len();
+
+        // Capture fully qualified calls as imports
+        if len > 1 {
+            let mut current_tree = &mut self.imports_tree;
+
+            for (index, segment) in segments.iter().enumerate() {
+                let segment_name = segment.ident.to_string();
+
+                if index == len - 1 {
+                    // Last segment, insert as None to indicate the end of the import
+                    current_tree.0.entry(segment_name).or_insert(None);
+                } else {
+                    // Intermediate segments, insert as Some(Tree)
+                    current_tree = current_tree
+                        .0
+                        .entry(segment_name)
+                        .or_insert_with(|| Some(Tree::new()))
+                        .as_mut()
+                        .unwrap();
+                }
+            }
+        }
+
+        syn::visit::visit_expr_path(self, i);
+    }
 }
 
 #[cfg(test)]
@@ -220,6 +268,7 @@ mod test {
             exports,
             json!({
                 "package_1": {
+                    "public_hello_unused": null,
                     "public_hello_1": null,
                     "public_hello_2": null,
                     "public_hello_3": null,
@@ -249,6 +298,7 @@ mod test {
                 "package_1": {
                     "public_hello_1": null,
                     "public_hello_2": null,
+                    "public_hello_3": null,
                     "public_module": {
                         "public_hello": null,
                         "public": {

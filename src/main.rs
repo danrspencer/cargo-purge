@@ -7,7 +7,7 @@ use cargo::core::Workspace;
 use cargo::Config;
 use std::path::{Path, PathBuf};
 
-fn main() {
+pub fn main() {
     let current_path = std::env::current_dir().unwrap();
 
     let unused_exports = find_unused_exports(current_path);
@@ -63,7 +63,7 @@ mod test {
 
         assert_eq!(
             unused_exports,
-            json!({ "package_1": { "public_hello_3": null }})
+            json!({ "package_1": { "public_hello_unused": null }})
         )
     }
 }

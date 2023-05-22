@@ -1,6 +1,10 @@
 mod private_module;
 pub mod public_module;
 
+pub fn public_hello_unused() {
+    println!("Hello, world!");
+}
+
 pub fn public_hello_1() {
     println!("Hello, world!");
 }
