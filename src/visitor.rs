@@ -269,6 +269,8 @@ mod test {
 
         let exports = serde_json::to_value(visitor.exports_tree).unwrap();
 
+        // TODO - Add in an export inside an inline module
+
         assert_eq!(
             exports,
             json!({
